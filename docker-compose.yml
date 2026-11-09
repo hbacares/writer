@@ -1,0 +1,94 @@
+services:
+    app:
+        build:
+            context: .
+            dockerfile: docker/Dockerfile
+        container_name: writer-main
+        env_file: .env
+        environment:
+            # Aikido Safe Chain configuration
+            SAFE_CHAIN_LOGGING: "normal"  # verbose | normal | silent
+            SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS: 48
+            SAFE_CHAIN_LOG_FILE: "/var/log/safe-chain.log"
+        volumes:
+            - .:/var/www/html
+        depends_on:
+            db:
+                condition: service_healthy
+        labels:
+            - "traefik.enable=true"
+            # HTTP router
+            - "traefik.http.routers.writer-http.rule=Host(`writer.localhost`) || Host(`writer.localhome`)"
+            - "traefik.http.routers.writer-http.entrypoints=web"
+            # HTTPS router
+            - "traefik.http.routers.writer-https.rule=Host(`writer.localhost`) || Host(`writer.localhome`)"
+            - "traefik.http.routers.writer-https.entrypoints=websecure"
+            - "traefik.http.routers.writer-https.tls=true"
+            # Network
+            - "traefik.http.services.writer.loadbalancer.server.port=8080"
+            - "traefik.docker.network=traefik_proxy"
+        networks:
+            - traefik_proxy
+            - internal
+    queue:
+        build:
+            context: .
+            dockerfile: docker/Dockerfile
+        container_name: writer-queue
+        command: supervisord -c /etc/supervisor/conf.d/supervisord.conf
+        env_file: .env
+        volumes:
+            - .:/var/www/html
+            - ./docker/supervisord.conf:/etc/supervisor/conf.d/supervisord.conf
+        depends_on:
+            db:
+                condition: service_healthy
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.writer-supervisor.rule=Host(`writer-supervisor.localhost`) || Host(`writer-supervisor.localhome`)"
+            - "traefik.http.routers.writer-supervisor.entrypoints=web"
+            - "traefik.http.services.writer-supervisor.loadbalancer.server.port=9001"
+            - "traefik.docker.network=traefik_proxy"
+        networks:
+            - traefik_proxy
+            - internal
+ 
+    db:
+        image: postgres:18
+        container_name: writer-db
+        environment:
+            POSTGRES_DB: ${DB_DATABASE}
+            POSTGRES_USER: ${DB_USERNAME}
+            POSTGRES_PASSWORD: ${DB_PASSWORD}
+        volumes:
+            - pgdata:/var/lib/postgresql
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+        networks:
+            - internal        # NOT on traefik_proxy — DB is never publicly accessible
+    ssh:
+        image: lscr.io/linuxserver/openssh-server:latest
+        container_name: writer-ssh
+        environment:
+            PUID: 1000
+            PGID: 1000
+            PASSWORD_ACCESS: "true"
+            USER_NAME: tunnel
+            USER_PASSWORD: secret
+            SUDO_ACCESS: "false"
+            DOCKER_MODS: linuxserver/mods:openssh-server-ssh-tunnel
+        ports:
+            - "2263:2222"       # exposed to your Mac for TablePlus to connect to
+        networks:
+            - internal          # only needs internal — it's the tunnel endpoint, not a web service
+volumes:
+    pgdata:
+ 
+networks:
+    traefik_proxy:
+        external: true      # Must already exist (created by Traefik's compose)
+    internal:
+        driver: bridge      # Isolated to this project only

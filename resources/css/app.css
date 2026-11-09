@@ -1,0 +1,19 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+@import "trix/dist/trix.css";
+
+trix-toolbar .trix-button-group {
+    @apply bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600;
+}
+
+trix-editor {
+    @apply bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-700 rounded-md min-h-[200px];
+}
+
+trix-editor:focus {
+    @apply ring-2 ring-indigo-500 border-indigo-500;
+}
+
+.trix-content {
+    @apply prose dark:prose-invert max-w-none;
+}
