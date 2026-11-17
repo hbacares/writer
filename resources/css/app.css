@@ -2,6 +2,14 @@
 @plugin "@tailwindcss/typography";
 @import "trix/dist/trix.css";
 
+html {
+    color-scheme: light dark;
+}
+
+html, body {
+    @apply bg-gray-100 dark:bg-gray-900;
+}
+
 trix-toolbar .trix-button-group {
     @apply bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600;
 }
